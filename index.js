@@ -19,17 +19,23 @@ app.get('/proxy', async (req, res) => {
     }
 
     try {
-        const response = await axios.get(targetUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-            }
-        });
+    const response = await axios.get(targetUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0...' }
+    });
 
-        res.setHeader('Content-Type', 'text/html');
-        res.send(response.data);
-    } catch (error) {
-        res.status(500).send("Error fetching the site: " + error.message);
-    }
+    let html = response.data;
+
+    // This creates a URL object to get the 'origin' (e.g., https://www.google.com)
+    const origin = new URL(targetUrl).origin;
+
+    // Inject the <base> tag right after the opening <head> tag
+    html = html.replace('<head>', `<head><base href="${origin}/">`);
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+} catch (error) {
+    res.status(500).send("Error fetching the site.");
+}
 });
 
 app.listen(PORT, () => {
