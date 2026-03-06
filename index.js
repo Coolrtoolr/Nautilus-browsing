@@ -18,23 +18,36 @@ app.get('/proxy', async (req, res) => {
         return res.status(400).send("No URL provided.");
     }
 
-    try {
+try {
     const response = await axios.get(targetUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0...' }
+        headers: { 'User-Agent': 'Mozilla/5.0...' },
+        responseType: 'arraybuffer' 
     });
 
-    let html = response.data;
+    const contentType = response.headers['content-type'];
+    res.setHeader('Content-Type', contentType);
 
-    // This creates a URL object to get the 'origin' (e.g., https://www.google.com)
-    const origin = new URL(targetUrl).origin;
+    let data = response.data;
 
-    // Inject the <base> tag right after the opening <head> tag
-    html = html.replace('<head>', `<head><base href="${origin}/">`);
+    // Only rewrite if we are dealing with a web page (HTML)
+    if (contentType && contentType.includes('text/html')) {
+        let html = data.toString();
+        const origin = new URL(targetUrl).origin;
 
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
+        // 1. Inject the <base> tag to help with images/styles
+        html = html.replace('<head>', `<head><base href="${origin}/">`);
+
+        // 2. Hijack the search forms! 
+        // This looks for 'action="/' and changes it to 'action="/proxy?url=https://site.com/'
+        html = html.replace(/action="\//g, `action="/proxy?url=${origin}/`);
+
+        res.send(html);
+    } else {
+        // If it's an image, script, or CSS, send the raw bytes
+        res.send(data);
+    }
 } catch (error) {
-    res.status(500).send("Error fetching the site.");
+    res.status(500).send("Proxy error: " + error.message);
 }
 });
 
