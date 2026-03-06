@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!url.startsWith("http")) {
       url = "https://" + url;
     }
-    viewport.src = url;
+    // We use a "template literal" (the backticks ``) to easily plug in the URL
+    viewport.src = `/proxy?url=${url}`;
   });
 });
