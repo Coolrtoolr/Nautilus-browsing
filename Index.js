@@ -7,5 +7,5 @@ loadBtn.addEventListener("click", () => {
   if (!url.startsWith("http")) {
     url = "https://" + url;
   }
-  veiwport.src = url;
+  viewport.src = url;
 });
