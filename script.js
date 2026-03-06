@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!url.startsWith("http")) {
       url = "https://" + url;
     }
-    // We use a "template literal" (the backticks ``) to easily plug in the URL
-    viewport.src = `/proxy?url=${url}`;
+    // This tells the iframe to ask YOUR server for the page
+    viewport.src = `/proxy?url=${encodeURIComponent(url)}`;
   });
 });
