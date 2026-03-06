@@ -17,7 +17,14 @@ app.get('/proxy', async (req, res) => {
     if (!targetUrl) {
         return res.status(400).send("No URL provided.");
     }
+    // Inside your app.get('/proxy', ...)
+const origin = new URL(targetUrl).origin; // Gets "https://www.google.com"
 
+// We find the <head> tag and slip our <base> tag right after it
+let html = response.data.toString();
+html = html.replace('<head>', `<head><base href="${origin}/">`);
+
+res.send(html);
 try {
     const response = await axios.get(targetUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0...' },
