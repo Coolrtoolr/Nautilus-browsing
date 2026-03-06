@@ -1,0 +1,33 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100vh; /* 100% of the Viewport Height */
+  overflow: hidden; /* Prevents double scrollbars */
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#nav-bar {
+  display: flex;
+  background-color: #E7E7E7;
+  gap: 10px;
+  padding: 10px;
+  
+}
+
+#address-bar {
+  flex-grow: 1;
+  padding: 8px 15px;
+  border-radius: 20px;
+  outline: none;
+  border: none;
+}
+
+#viewport-frame {
+  flex-grow: 1;
+  border: none;
+  width: 100%;
+}
