@@ -24,6 +24,7 @@ body {
   border-radius: 20px;
   outline: none;
   border: none;
+  width: 100vw;
 }
 
 #viewport-frame {
