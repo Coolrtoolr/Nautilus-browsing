@@ -35,14 +35,21 @@ app.get('/proxy', async (req, res) => {
 
         // 4. Modify if it's HTML
         if (contentType && contentType.includes('text/html')) {
-            let html = data.toString();
-            const origin = new URL(targetUrl).origin;
+    let html = data.toString();
+    const origin = new URL(targetUrl).origin;
 
-            html = html.replace('<head>', `<head><base href="${origin}/">`);
-            html = html.replace(/action="\//g, `action="/proxy?url=${origin}/`);
+    // 1. Force the base tag at the very top
+    html = `<base href="${origin}/">` + html;
 
-            res.send(html);
-        } else {
+    // 2. Hijack all relative Links and Images
+    // This finds src="/..." or href="/..." and turns them into absolute proxy links
+    html = html.replace(/(src|href|action)=["']\/([^"']+)["']/g, (match, attribute, path) => {
+        const fullUrl = `${origin}/${path}`;
+        return `${attribute}="/proxy?url=${encodeURIComponent(fullUrl)}"`;
+    });
+
+    res.send(html);
+}else {
             res.send(data);
         }
     } catch (error) {
