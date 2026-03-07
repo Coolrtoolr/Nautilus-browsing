@@ -46,11 +46,29 @@ app.get('/proxy', async (req, res) => {
         // 4. Modify if it's HTML
         if (contentType && contentType.includes('text/html')) {
     let html = data.toString();
-    const origin = new URL(targetUrl).origin;
-            // Create a script that "overrides" the browser's fetch and window.location
-    const helperScript = `
+
+    // 1. Define the Super Script (Combines both your helper and CORS fixer)
+    const superScript = `
         <script>
-            // This captures all clicks on <a> tags
+            // PART A: The CORS / Fetch Fixer
+            const _p = (u) => {
+                if (!u || u.startsWith(window.location.origin) || u.startsWith('/proxy')) return u;
+                try {
+                    const full = new URL(u, window.location.href).href;
+                    return '/proxy?url=' + encodeURIComponent(full);
+                } catch(e) { return u; }
+            };
+            const { fetch: origFetch } = window;
+            window.fetch = async (...args) => {
+                args[0] = typeof args[0] === 'string' ? _p(args[0]) : args[0];
+                return origFetch(...args);
+            };
+            const origOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(m, u) {
+                return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
+            };
+
+            // PART B: The Click Hijacker
             document.addEventListener('click', e => {
                 const link = e.target.closest('a');
                 if (link && link.href && !link.href.includes('/proxy?url=')) {
@@ -61,55 +79,20 @@ app.get('/proxy', async (req, res) => {
         </script>
     `;
 
-    // Inject both the base tag and our helper script
-    html = `<head><base href="${origin}/">${helperScript}` + html.replace('<head>', '');
-    // 1. Remove any existing <base> tags so they don't conflict with ours
+    // 2. Clean up: Remove any existing <base> tags
     html = html.replace(/<base[^>]*>/gi, '');
 
-        if (contentType && contentType.includes('text/html')) {
-    let html = data.toString();
-    
-    // This script intercepts "fetch" and "XMLHttpRequest" 
-    // and forces them through your /proxy route
-    const corsFixerScript = `
-    <script>
-      const _p = (u) => {
-        if (!u || u.startsWith(window.location.origin) || u.startsWith('/proxy')) return u;
-        try {
-          const full = new URL(u, window.location.href).href;
-          return '/proxy?url=' + encodeURIComponent(full);
-        } catch(e) { return u; }
-      };
-      
-      const { fetch: origFetch } = window;
-      window.fetch = async (...args) => {
-        args[0] = typeof args[0] === 'string' ? _p(args[0]) : args[0];
-        return origFetch(...args);
-      };
+    // 3. Inject: Put our <base> and <script> right at the top of <head>
+    const injection = `<head><base href="${origin}/">${superScript}`;
+    html = html.replace('<head>', injection);
 
-      const origOpen = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function(m, u) {
-        return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
-      };
-    </script>`;
-
-    // Inject everything into the top of the page
-    html = `<head><base href="${origin}/">` + corsFixerScript + html.replace('<head>', '');
-    
+    // 4. Send the final result ONCE
     res.send(html);
+
+} else {
+    // If it's not HTML (like an image or JS file), just send the raw data
+    res.send(data);
 }
-    // 2. Inject our base tag right after the <head> tag
-    // If <head> doesn't exist, we'll just put it at the very top
-    if (html.includes('<head>')) {
-        html = html.replace('<head>', `<head><base href="${origin}/">`);
-    } else {
-        html = `<base href="${origin}/">` + html;
-    }
-
-    res.send(html);
-}else {
-            res.send(data);
-        }
     } catch (error) {
         console.error("Proxy Error:", error.message);
         res.status(502).send("Proxy error: " + error.message);
