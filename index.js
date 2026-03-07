@@ -22,9 +22,11 @@ app.get('/proxy', async (req, res) => {
         }
 
         // 2. Fetch the external site
+        // 2. Fetch the external site
         const response = await axios.get(targetUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0...' },
-            responseType: 'arraybuffer' 
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' },
+        responseType: 'arraybuffer',
+        maxRedirects: 5 // Ensure we follow those "www" jumps
         });
 
         // Delete the security headers that block iframes
