@@ -36,7 +36,7 @@ app.get('/proxy', async (req, res) => {
             'content-security-policy-report-only','expect-ct','x-content-type-options','cross-origin-opener-policy', 
             'cross-origin-embedder-policy'
         ];// Delete EVERY known header that can block an iframe
-        
+
         // Delete the security headers that block iframes
         delete response.headers[headersToRemove];
         // Inside your app.get('/proxy'...)
@@ -87,6 +87,12 @@ document.addEventListener('submit', e => {
     if (form && form.action && !form.action.includes('/proxy?url=')) {
         e.preventDefault(); // Stop the browser from leaving the page
         
+        // Inside your submit event listener
+const proxyBase = window.location.origin + '/proxy?url=';
+const target = url.origin + url.pathname + '?' + params.toString();
+
+window.location.href = proxyBase + encodeURIComponent(target);
+
         // Construct the full URL with the search terms
         const url = new URL(form.action, window.location.href);
         const formData = new FormData(form);
