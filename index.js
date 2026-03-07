@@ -101,7 +101,19 @@ document.addEventListener('submit', e => {
         window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(finalUrl);
     }
 });
-});
+
+// PART D: Security Neutralizer
+// Disable history manipulation to prevent origin mismatch errors
+window.history.replaceState = function() { /* Do nothing */ };
+window.history.pushState = function() { /* Do nothing */ };
+
+// Optional: Try to catch font/resource errors silently
+window.addEventListener('error', e => {
+    if (e.message.includes('history') || e.message.includes('origin')) {
+        e.stopImmediatePropagation();
+    }
+}, true);
+
         </script>
     `;
 
