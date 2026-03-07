@@ -36,7 +36,19 @@ app.get('/proxy', async (req, res) => {
         // Delete the security headers that block iframes
         delete response.headers['x-frame-options'];
         delete response.headers['content-security-policy'];
+        // Inside your app.get('/proxy'...)
+// Delete EVERY known header that can block an iframe
+const headersToRemove = [
+    'x-frame-options',
+    'content-security-policy',
+    'content-security-policy-report-only',
+    'expect-ct',
+    'x-content-type-options',
+    'cross-origin-opener-policy',
+    'cross-origin-embedder-policy'
+];
 
+headersToRemove.forEach(h => delete response.headers[h]);
         // 3. Set the Content-Type (The "Grabber")
         const contentType = response.headers['content-type'];
         res.setHeader('Content-Type', contentType);
