@@ -94,7 +94,7 @@ app.get('/proxy', async (req, res) => {
     </script>`;
 
     // Inject everything into the top of the page
-    html = `<head><base href="${origin}/">${corsFixerScript}` + html.replace('<head>', '');
+    html = `<head><base href="${origin}/">` + corsFixerScript + html.replace('<head>', '');
     
     res.send(html);
 }
