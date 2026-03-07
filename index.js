@@ -12,71 +12,41 @@ app.get('/', (req, res) => {
 
 // 2. Add the Proxy Route here!
 app.get('/proxy', async (req, res) => {
-    const targetUrl = req.query.url;
-
-    if (!targetUrl) {
-        return res.status(400).send("No URL provided.");
-    }
-    // Inside your app.get('/proxy', ...)
-const origin = new URL(targetUrl).origin; // Gets "https://www.google.com"
-
-// We find the <head> tag and slip our <base> tag right after it
-let html = response.data.toString();
-html = html.replace('<head>', `<head><base href="${origin}/">`);
-
-res.send(html);
-try {
-    const response = await axios.get(targetUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0...' },
-        responseType: 'arraybuffer' 
-    });
-
-    const contentType = response.headers['content-type'];
-    res.setHeader('Content-Type', contentType);
-
-    let data = response.data;
-
-    // Only rewrite if we are dealing with a web page (HTML)
-    if (contentType && contentType.includes('text/html')) {
-        let html = data.toString();
-        const origin = new URL(targetUrl).origin;
-
-        // 1. Inject the <base> tag to help with images/styles
-        html = html.replace('<head>', `<head><base href="${origin}/">`);
-
-        // 2. Hijack the search forms! 
-        // This looks for 'action="/' and changes it to 'action="/proxy?url=https://site.com/'
-        html = html.replace(/action="\//g, `action="/proxy?url=${origin}/`);
-
-        res.send(html);
-    } else {
-        // If it's an image, script, or CSS, send the raw bytes
-        res.send(data);
-    }
-} catch (error) {
-    res.status(500).send("Proxy error: " + error.message);
-}
-});
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-app.get('/proxy', async (req, res) => {
     let targetUrl = req.query.url;
-
-    if (!targetUrl) return res.status(400).send("No URL provided");
+    if (!targetUrl) return res.status(400).send("No URL provided.");
 
     try {
-        // A little safety check: remove extra https:// if it's doubled up
+        // 1. Safety Check (Cleaning the URL)
         if (targetUrl.startsWith('https://https://')) {
             targetUrl = targetUrl.replace('https://https://', 'https://');
         }
 
-        const origin = new URL(targetUrl).origin;
-        // ... rest of your axios fetch ...
-        
-    } catch (err) {
-        console.error("URL Error:", err.message);
-        return res.status(400).send("Invalid URL provided");
+        // 2. Fetch the external site
+        const response = await axios.get(targetUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0...' },
+            responseType: 'arraybuffer' 
+        });
+
+        // 3. Set the Content-Type (The "Grabber")
+        const contentType = response.headers['content-type'];
+        res.setHeader('Content-Type', contentType);
+
+        let data = response.data;
+
+        // 4. Modify if it's HTML
+        if (contentType && contentType.includes('text/html')) {
+            let html = data.toString();
+            const origin = new URL(targetUrl).origin;
+
+            html = html.replace('<head>', `<head><base href="${origin}/">`);
+            html = html.replace(/action="\//g, `action="/proxy?url=${origin}/`);
+
+            res.send(html);
+        } else {
+            res.send(data);
+        }
+    } catch (error) {
+        console.error("Proxy Error:", error.message);
+        res.status(502).send("Proxy error: " + error.message);
     }
 });
