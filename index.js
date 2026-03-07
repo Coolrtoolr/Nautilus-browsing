@@ -66,29 +66,38 @@ app.get('/proxy', async (req, res) => {
     // 1. Remove any existing <base> tags so they don't conflict with ours
     html = html.replace(/<base[^>]*>/gi, '');
 
-        const corsFixerScript = `
-<script>
-  // 1. Rewrite the built-in 'fetch' function
-  const originalFetch = window.fetch;
-  window.fetch = (input, init) => {
-    let url = typeof input === 'string' ? input : input.url;
-    if (!url.startsWith(window.location.origin) && !url.startsWith('/proxy')) {
-      url = '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
-    }
-    return originalFetch(url, init);
-  };
+        if (contentType && contentType.includes('text/html')) {
+    let html = data.toString();
+    
+    // This script intercepts "fetch" and "XMLHttpRequest" 
+    // and forces them through your /proxy route
+    const corsFixerScript = `
+    <script>
+      const _p = (u) => {
+        if (!u || u.startsWith(window.location.origin) || u.startsWith('/proxy')) return u;
+        try {
+          const full = new URL(u, window.location.href).href;
+          return '/proxy?url=' + encodeURIComponent(full);
+        } catch(e) { return u; }
+      };
+      
+      const { fetch: origFetch } = window;
+      window.fetch = async (...args) => {
+        args[0] = typeof args[0] === 'string' ? _p(args[0]) : args[0];
+        return origFetch(...args);
+      };
 
-  // 2. Rewrite XMLHttpRequest (AJAX)
-  const originalOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url) {
-    if (!url.startsWith(window.location.origin) && !url.startsWith('/proxy')) {
-      url = '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
-    }
-    return originalOpen.apply(this, [method, url]);
-  };
-</script>
-`;
+      const origOpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(m, u) {
+        return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
+      };
+    </script>`;
 
+    // Inject everything into the top of the page
+    html = `<head><base href="${origin}/">${corsFixerScript}` + html.replace('<head>', '');
+    
+    res.send(html);
+}
     // 2. Inject our base tag right after the <head> tag
     // If <head> doesn't exist, we'll just put it at the very top
     if (html.includes('<head>')) {
