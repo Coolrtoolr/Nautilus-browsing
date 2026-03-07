@@ -61,3 +61,22 @@ try {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+app.get('/proxy', async (req, res) => {
+    let targetUrl = req.query.url;
+
+    if (!targetUrl) return res.status(400).send("No URL provided");
+
+    try {
+        // A little safety check: remove extra https:// if it's doubled up
+        if (targetUrl.startsWith('https://https://')) {
+            targetUrl = targetUrl.replace('https://https://', 'https://');
+        }
+
+        const origin = new URL(targetUrl).origin;
+        // ... rest of your axios fetch ...
+        
+    } catch (err) {
+        console.error("URL Error:", err.message);
+        return res.status(400).send("Invalid URL provided");
+    }
+});
