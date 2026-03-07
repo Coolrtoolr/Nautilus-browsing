@@ -47,7 +47,22 @@ app.get('/proxy', async (req, res) => {
         if (contentType && contentType.includes('text/html')) {
     let html = data.toString();
     const origin = new URL(targetUrl).origin;
+            // Create a script that "overrides" the browser's fetch and window.location
+    const helperScript = `
+        <script>
+            // This captures all clicks on <a> tags
+            document.addEventListener('click', e => {
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.includes('/proxy?url=')) {
+                    e.preventDefault();
+                    window.location.href = '/proxy?url=' + encodeURIComponent(link.href);
+                }
+            });
+        </script>
+    `;
 
+    // Inject both the base tag and our helper script
+    html = `<head><base href="${origin}/">${helperScript}` + html.replace('<head>', '');
     // 1. Remove any existing <base> tags so they don't conflict with ours
     html = html.replace(/<base[^>]*>/gi, '');
 
