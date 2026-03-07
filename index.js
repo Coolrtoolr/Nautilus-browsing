@@ -38,27 +38,16 @@ app.get('/proxy', async (req, res) => {
     let html = data.toString();
     const origin = new URL(targetUrl).origin;
 
-    // 1. Force the base tag at the very top
-    html = `<base href="${origin}/">` + html;
+    // 1. Remove any existing <base> tags so they don't conflict with ours
+    html = html.replace(/<base[^>]*>/gi, '');
 
-    // 2. Hijack all relative Links and Images
-    // This finds src="/..." or href="/..." and turns them into absolute proxy links
-    html = html.replace(/(href|src|action)=["']([^"']+)["']/g, (match, attr, path) => {
-    // 1. If it's already a proxy link, don't double-wrap it
-    if (path.includes('/proxy?url=')) return match;
-    
-    // 2. Build the target URL
-    let absoluteUrl;
-    try {
-        // This handles both "/search" and "https://google.com/search"
-        absoluteUrl = new URL(path, origin).href;
-    } catch (e) {
-        return match; // If it's not a valid link (like "javascript:void(0)"), leave it alone
+    // 2. Inject our base tag right after the <head> tag
+    // If <head> doesn't exist, we'll just put it at the very top
+    if (html.includes('<head>')) {
+        html = html.replace('<head>', `<head><base href="${origin}/">`);
+    } else {
+        html = `<base href="${origin}/">` + html;
     }
-
-    // 3. Wrap it in our proxy
-    return `${attr}="/proxy?url=${encodeURIComponent(absoluteUrl)}"`;
-});
 
     res.send(html);
 }else {
