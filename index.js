@@ -88,18 +88,19 @@ headersToRemove.forEach(h => delete response.headers[h]);
             // PART C: The Form Hijacker
 document.addEventListener('submit', e => {
     const form = e.target.closest('form');
-    if (form && form.action && !form.action.includes('/proxy?url=')) {
-        e.preventDefault(); // Stop the browser from leaving the page
+    if (form && form.action) {
+        e.preventDefault();
         
-        // Inside your submit event listener
-const proxyBase = window.location.origin + '/proxy?url=';
-const target = url.origin + url.pathname + '?' + params.toString();
-
-window.location.href = proxyBase + encodeURIComponent(target);
+        // This MUST happen before we use 'url' below
+        const targetUrl = new URL(form.action, window.location.href); 
         
-        // Redirect the IFRAME to the proxied search results
-        window.location.href = '/proxy?url=' + encodeURIComponent(url.origin + url.pathname + '?' + params.toString());
+        const formData = new FormData(form);
+        const params = new URLSearchParams(formData);
+        
+        const finalUrl = targetUrl.origin + targetUrl.pathname + '?' + params.toString();
+        window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(finalUrl);
     }
+});
 });
         </script>
     `;
