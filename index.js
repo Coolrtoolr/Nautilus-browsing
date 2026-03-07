@@ -61,6 +61,29 @@ app.get('/proxy', async (req, res) => {
         </script>
     `;
 
+    const corsFixerScript = `
+<script>
+  // 1. Rewrite the built-in 'fetch' function
+  const originalFetch = window.fetch;
+  window.fetch = (input, init) => {
+    let url = typeof input === 'string' ? input : input.url;
+    if (!url.startsWith(window.location.origin) && !url.startsWith('/proxy')) {
+      url = '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+    }
+    return originalFetch(url, init);
+  };
+
+  // 2. Rewrite XMLHttpRequest (AJAX)
+  const originalOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    if (!url.startsWith(window.location.origin) && !url.startsWith('/proxy')) {
+      url = '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+    }
+    return originalOpen.apply(this, [method, url]);
+  };
+</script>
+`;
+
     // Inject both the base tag and our helper script
     html = `<head><base href="${origin}/">${helperScript}` + html.replace('<head>', '');
     // 1. Remove any existing <base> tags so they don't conflict with ours
