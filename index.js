@@ -81,7 +81,11 @@ app.get('/proxy', async (req, res) => {
 
     // 2. Clean up: Remove any existing <base> tags
     html = html.replace(/<base[^>]*>/gi, '');
-
+    
+    // 2.5 Scrub security meta tags from the HTML string
+    html = html.replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '');
+    html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
+    
     // 3. Inject: Put our <base> and <script> right at the top of <head>
     const injection = `<head><base href="${origin}/">${superScript}`;
     html = html.replace(/<head[^>]*>/i, injection);
