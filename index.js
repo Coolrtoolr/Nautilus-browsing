@@ -84,7 +84,7 @@ app.get('/proxy', async (req, res) => {
 
     // 3. Inject: Put our <base> and <script> right at the top of <head>
     const injection = `<head><base href="${origin}/">${superScript}`;
-    html = html.replace('<head>', injection);
+    html = html.replace(/<head[^>]*>/i, injection);
 
     // 4. Send the final result ONCE
     res.send(html);
