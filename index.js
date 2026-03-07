@@ -61,7 +61,12 @@ app.get('/proxy', async (req, res) => {
         </script>
     `;
 
-    const corsFixerScript = `
+    // Inject both the base tag and our helper script
+    html = `<head><base href="${origin}/">${helperScript}` + html.replace('<head>', '');
+    // 1. Remove any existing <base> tags so they don't conflict with ours
+    html = html.replace(/<base[^>]*>/gi, '');
+
+        const corsFixerScript = `
 <script>
   // 1. Rewrite the built-in 'fetch' function
   const originalFetch = window.fetch;
@@ -83,11 +88,6 @@ app.get('/proxy', async (req, res) => {
   };
 </script>
 `;
-
-    // Inject both the base tag and our helper script
-    html = `<head><base href="${origin}/">${helperScript}` + html.replace('<head>', '');
-    // 1. Remove any existing <base> tags so they don't conflict with ours
-    html = html.replace(/<base[^>]*>/gi, '');
 
     // 2. Inject our base tag right after the <head> tag
     // If <head> doesn't exist, we'll just put it at the very top
