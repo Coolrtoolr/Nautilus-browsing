@@ -32,20 +32,14 @@ app.get('/proxy', async (req, res) => {
         // Get the actual URL we landed on (handles the "www" issue!)
         const finalUrl = response.request.res.responseUrl || targetUrl;
         const origin = new URL(finalUrl).origin;
-
+        const headersToRemove = ['x-frame-options', 'content-security-policy', 'strict-transport-security',
+            'content-security-policy-report-only','expect-ct','x-content-type-options','cross-origin-opener-policy', 
+            'cross-origin-embedder-policy'
+        ];// Delete EVERY known header that can block an iframe
+        
         // Delete the security headers that block iframes
         delete response.headers[headersToRemove];
         // Inside your app.get('/proxy'...)
-// Delete EVERY known header that can block an iframe
-const headersToRemove = [
-    'x-frame-options',
-    'content-security-policy',
-    'content-security-policy-report-only',
-    'expect-ct',
-    'x-content-type-options',
-    'cross-origin-opener-policy',
-    'cross-origin-embedder-policy'
-];
 
 headersToRemove.forEach(h => delete response.headers[h]);
         // 3. Set the Content-Type (The "Grabber")
