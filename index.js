@@ -76,10 +76,6 @@ app.get('/proxy', async (req, res) => {
                     window.location.href = '/proxy?url=' + encodeURIComponent(link.href);
                 }
             });
-            // This prevents 'frame-busting' by blocking attempts to leave the page
-window.onbeforeunload = function() {
-    return "Stop!"; // This triggers a browser sync that can break the redirect loop
-};
         </script>
     `;
 
