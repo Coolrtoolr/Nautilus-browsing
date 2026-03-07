@@ -76,6 +76,21 @@ app.get('/proxy', async (req, res) => {
                     window.location.href = '/proxy?url=' + encodeURIComponent(link.href);
                 }
             });
+            // PART C: The Form Hijacker
+document.addEventListener('submit', e => {
+    const form = e.target.closest('form');
+    if (form && form.action && !form.action.includes('/proxy?url=')) {
+        e.preventDefault(); // Stop the browser from leaving the page
+        
+        // Construct the full URL with the search terms
+        const url = new URL(form.action, window.location.href);
+        const formData = new FormData(form);
+        const params = new URLSearchParams(formData);
+        
+        // Redirect the IFRAME to the proxied search results
+        window.location.href = '/proxy?url=' + encodeURIComponent(url.origin + url.pathname + '?' + params.toString());
+    }
+});
         </script>
     `;
 
