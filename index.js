@@ -29,6 +29,10 @@ app.get('/proxy', async (req, res) => {
         maxRedirects: 5 // Ensure we follow those "www" jumps
         });
 
+        // Get the actual URL we landed on (handles the "www" issue!)
+        const finalUrl = response.request.res.responseUrl || targetUrl;
+        const origin = new URL(finalUrl).origin;
+
         // Delete the security headers that block iframes
         delete response.headers['x-frame-options'];
         delete response.headers['content-security-policy'];
