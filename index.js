@@ -43,10 +43,22 @@ app.get('/proxy', async (req, res) => {
 
     // 2. Hijack all relative Links and Images
     // This finds src="/..." or href="/..." and turns them into absolute proxy links
-    html = html.replace(/(src|href|action)=["']\/([^"']+)["']/g, (match, attribute, path) => {
-        const fullUrl = `${origin}/${path}`;
-        return `${attribute}="/proxy?url=${encodeURIComponent(fullUrl)}"`;
-    });
+    html = html.replace(/(href|src|action)=["']([^"']+)["']/g, (match, attr, path) => {
+    // 1. If it's already a proxy link, don't double-wrap it
+    if (path.includes('/proxy?url=')) return match;
+    
+    // 2. Build the target URL
+    let absoluteUrl;
+    try {
+        // This handles both "/search" and "https://google.com/search"
+        absoluteUrl = new URL(path, origin).href;
+    } catch (e) {
+        return match; // If it's not a valid link (like "javascript:void(0)"), leave it alone
+    }
+
+    // 3. Wrap it in our proxy
+    return `${attr}="/proxy?url=${encodeURIComponent(absoluteUrl)}"`;
+});
 
     res.send(html);
 }else {
