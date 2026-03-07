@@ -34,8 +34,7 @@ app.get('/proxy', async (req, res) => {
         const origin = new URL(finalUrl).origin;
 
         // Delete the security headers that block iframes
-        delete response.headers['x-frame-options'];
-        delete response.headers['content-security-policy'];
+        delete response.headers[headersToRemove];
         // Inside your app.get('/proxy'...)
 // Delete EVERY known header that can block an iframe
 const headersToRemove = [
