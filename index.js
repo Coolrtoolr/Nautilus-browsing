@@ -55,6 +55,10 @@ headersToRemove.forEach(h => delete response.headers[h]);
     // 1. Define the Super Script (Combines both your helper and CORS fixer)
     const superScript = `
         <script>
+        // Construct the full URL with the search terms
+        const url = new URL(form.action, window.location.href);
+        const formData = new FormData(form);
+        const params = new URLSearchParams(formData);
             // PART A: The CORS / Fetch Fixer
             const _p = (u) => {
                 if (!u || u.startsWith(window.location.origin) || u.startsWith('/proxy')) return u;
@@ -92,11 +96,6 @@ const proxyBase = window.location.origin + '/proxy?url=';
 const target = url.origin + url.pathname + '?' + params.toString();
 
 window.location.href = proxyBase + encodeURIComponent(target);
-
-        // Construct the full URL with the search terms
-        const url = new URL(form.action, window.location.href);
-        const formData = new FormData(form);
-        const params = new URLSearchParams(formData);
         
         // Redirect the IFRAME to the proxied search results
         window.location.href = '/proxy?url=' + encodeURIComponent(url.origin + url.pathname + '?' + params.toString());
