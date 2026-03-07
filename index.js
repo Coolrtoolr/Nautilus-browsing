@@ -76,6 +76,10 @@ app.get('/proxy', async (req, res) => {
                     window.location.href = '/proxy?url=' + encodeURIComponent(link.href);
                 }
             });
+            // This prevents 'frame-busting' by blocking attempts to leave the page
+window.onbeforeunload = function() {
+    return "Stop!"; // This triggers a browser sync that can break the redirect loop
+};
         </script>
     `;
 
@@ -84,7 +88,7 @@ app.get('/proxy', async (req, res) => {
     
     // 2.5 Scrub security meta tags from the HTML string
     html = html.replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '');
-    html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
+    html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '<!-- scrubbed -->');
     
     // 3. Inject: Put our <base> and <script> right at the top of <head>
     const injection = `<head><base href="${origin}/">${superScript}`;
