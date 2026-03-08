@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const axios = require('axios'); // 1. Add this!
+const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -10,178 +10,133 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 2. Add the Proxy Route here!
 app.get('/proxy', async (req, res) => {
     let targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send("No URL provided.");
 
     try {
-        // 1. Safety Check (Cleaning the URL)
         if (targetUrl.startsWith('https://https://')) {
             targetUrl = targetUrl.replace('https://https://', 'https://');
         }
 
-        // 2. Fetch the external site
-        // 2. Fetch the external site
         const response = await axios.get(targetUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' },
-        responseType: 'text',
-        maxRedirects: 5 // Ensure we follow those "www" jumps
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' },
+            responseType: 'text',
+            maxRedirects: 5 
         });
 
-        // Get the actual URL we landed on (handles the "www" issue!)
         const finalUrl = response.request.res.responseUrl || targetUrl;
         const origin = new URL(finalUrl).origin;
 
-// 1. Define the Super Script (Combines both your helper and CORS fixer)
-    const superScript = `
+        // Clean headers before setting them
+        const headersToRemove = [
+            'x-frame-options', 'content-security-policy', 'strict-transport-security',
+            'content-security-policy-report-only', 'expect-ct', 'x-content-type-options',
+            'cross-origin-opener-policy', 'cross-origin-embedder-policy'
+        ];
+        headersToRemove.forEach(h => delete response.headers[h]);
+
+        const contentType = response.headers['content-type'];
+        res.setHeader('Content-Type', contentType);
+
+        if (contentType && contentType.includes('text/html')) {
+            let html = response.data.toString();
+
+            const superScript = `
         <script>
             // PART A: The CORS / Fetch Fixer
             const _p = (u) => {
-    if (!u) return u;
-    
-    // 1. Skip if already proxied or pointing to your Render app
-    if (u.includes('/proxy?url=') || u.includes('nautilus-browsing.onrender.com')) return u;
+                if (!u) return u;
+                if (u.includes('/proxy?url=') || u.includes('nautilus-browsing.onrender.com')) return u;
 
-    try {
-        let absoluteUrl = u;
-        
-        // 2. If it's a relative path (starts with /), attach the origin
-        if (u.startsWith('/') && !u.startsWith('//')) {
-            absoluteUrl = '${origin}' + u; 
-        } else {
-            // Ensure it's a full URL
-            absoluteUrl = new URL(u, window.location.href).href;
-        }
+                try {
+                    let absoluteUrl = u;
+                    if (u.startsWith('/') && !u.startsWith('//')) {
+                        absoluteUrl = '${origin}' + u; 
+                    } else {
+                        absoluteUrl = new URL(u, window.location.href).href;
+                    }
+                    return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
+                } catch(e) { 
+                    return u; 
+                }
+            };
 
-        return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
-    } catch(e) { 
-        return u; 
-    }
-};
-    
-    try {
-        // 3. Otherwise, wrap it in your proxy URL
-        const full = new URL(u, window.location.href).href;
-        return window.location.origin + '/proxy?url=' + encodeURIComponent(full);
-    } catch(e) { 
-        return u; 
-    }
-};
             const { fetch: origFetch } = window;
             window.fetch = async (...args) => {
                 args[0] = typeof args[0] === 'string' ? _p(args[0]) : args[0];
                 return origFetch(...args);
             };
+
             const origOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(m, u) {
                 return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
             };
 
             // PART B: The Upgraded Click Hijacker
-document.addEventListener('click', e => {
-    const link = e.target.closest('a');
-    if (link && link.href && !link.href.includes('/proxy?url=')) {
-        e.preventDefault();
-        // Use window.location.origin to ensure we point back to YOUR server
-        const proxyUrl = window.location.origin + '/proxy?url=' + encodeURIComponent(link.href);
-        window.location.href = proxyUrl;
-    }
-});
+            document.addEventListener('click', e => {
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.includes('/proxy?url=')) {
+                    e.preventDefault();
+                    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(link.href);
+                }
+            });
+
             // PART C: The Form Hijacker
-document.addEventListener('submit', e => {
-    const form = e.target.closest('form');
-    if (form && form.action) {
-        e.preventDefault();
-        
-        // This MUST happen before we use 'url' below
-        const targetUrl = new URL(form.action, window.location.href); 
-        
-        const formData = new FormData(form);
-        const params = new URLSearchParams(formData);
-        
-        const finalUrl = targetUrl.origin + targetUrl.pathname + '?' + params.toString();
-        window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(finalUrl);
-    }
-});
+            document.addEventListener('submit', e => {
+                const form = e.target.closest('form');
+                if (form && form.action) {
+                    e.preventDefault();
+                    const tUrl = new URL(form.action, window.location.href); 
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams(formData);
+                    const finalSearchUrl = tUrl.origin + tUrl.pathname + '?' + params.toString();
+                    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(finalSearchUrl);
+                }
+            });
 
-// PART D: Soft Security Neutralizer
-// We "wrap" the original functions to prevent them from crashing the page
-const wrapHistory = (method) => {
-    const original = window.history[method];
-    window.history[method] = function(state, title, url) {
-        try {
-            // Only allow the change if it stays on our proxy domain
-            if (url && (url.startsWith('/') || url.includes(window.location.origin))) {
-                return original.apply(this, arguments);
-            }
-        } catch (e) {
-            console.warn('History.' + method + ' blocked to prevent crash');
-        }
-        // If it's a cross-origin URL, we just do nothing (fail silently)
-    };
-};
+            // PART D: Soft Security Neutralizer
+            const wrapHistory = (method) => {
+                const original = window.history[method];
+                window.history[method] = function(state, title, url) {
+                    try {
+                        if (url && (url.startsWith('/') || url.includes(window.location.origin))) {
+                            return original.apply(this, arguments);
+                        }
+                    } catch (e) {
+                        console.warn('History.' + method + ' blocked to prevent crash');
+                    }
+                };
+            };
+            wrapHistory('pushState');
+            wrapHistory('replaceState');
 
-wrapHistory('pushState');
-wrapHistory('replaceState');
-
-
-// Intercept all attempts to change the location manually
-const originalLocation = window.location.assign;
-window.location.assign = function(url) {
-    const proxied = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
-    return originalLocation.call(window.location, proxied);
-};
-
-// Also watch for "replace" calls (often used by search engines)
-const originalReplace = window.location.replace;
-window.location.replace = function(url) {
-    const proxied = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
-    return originalReplace.call(window.location, proxied);
-};
+            window.location.assign = function(url) {
+                window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
+            };
+            window.location.replace = function(url) {
+                window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
+            };
         </script>
     `;
 
-        const headersToRemove = ['x-frame-options', 'content-security-policy', 'strict-transport-security',
-            'content-security-policy-report-only','expect-ct','x-content-type-options','cross-origin-opener-policy', 
-            'cross-origin-embedder-policy'
-        ];// Delete EVERY known header that can block an iframe
-        
-headersToRemove.forEach(h => delete response.headers[h]);
-        // 3. Set the Content-Type (The "Grabber")
-        const contentType = response.headers['content-type'];
-        res.setHeader('Content-Type', contentType);
+            html = html.replace(/<base[^>]*>/gi, '');
+            html = html.replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '');
+            html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
+            
+            const injection = \`<head><base href="${origin}/">\${superScript}\`;
+            html = html.replace(/<head[^>]*>/i, injection);
 
-        let data = response.data;
-
-        // 4. Modify if it's HTML
-        if (contentType && contentType.includes('text/html')) {
-    let html = data.toString();
-
-
-    // 2. Clean up: Remove any existing <base> tags
-    html = html.replace(/<base[^>]*>/gi, '');
-    
-    // 2.5 Scrub security meta tags from the HTML string
-    html = html.replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '');
-    html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '<!-- scrubbed -->');
-    
-    // 3. Inject: Put our <base> and <script> right at the top of <head>
-    const injection = `<head><base href="${origin}/">${superScript}`;
-    html = html.replace(/<head[^>]*>/i, injection);
-
-    // 4. Send the final result ONCE
-    res.send(html);
-
-} else {
-    // If it's not HTML (like an image or JS file), just send the raw data
-    res.send(data);
-}
+            res.send(html);
+        } else {
+            res.send(response.data);
+        }
     } catch (error) {
         console.error("Proxy Error:", error.message);
         res.status(502).send("Proxy error: " + error.message);
     }
 });
+
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(\`Server is running on port \${PORT}\`);
 });
