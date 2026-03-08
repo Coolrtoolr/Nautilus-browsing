@@ -1,4 +1,7 @@
 const express = require('express');
+const path = require('path');
+const axios = require('axios');
+const app = express();
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -10,9 +13,6 @@ app.use((req, res, next) => {
     }
     next();
 });
-const path = require('path');
-const axios = require('axios');
-const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(__dirname));
