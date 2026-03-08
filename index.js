@@ -32,23 +32,8 @@ app.get('/proxy', async (req, res) => {
         // Get the actual URL we landed on (handles the "www" issue!)
         const finalUrl = response.request.res.responseUrl || targetUrl;
         const origin = new URL(finalUrl).origin;
-        const headersToRemove = ['x-frame-options', 'content-security-policy', 'strict-transport-security',
-            'content-security-policy-report-only','expect-ct','x-content-type-options','cross-origin-opener-policy', 
-            'cross-origin-embedder-policy'
-        ];// Delete EVERY known header that can block an iframe
-        
-headersToRemove.forEach(h => delete response.headers[h]);
-        // 3. Set the Content-Type (The "Grabber")
-        const contentType = response.headers['content-type'];
-        res.setHeader('Content-Type', contentType);
 
-        let data = response.data;
-
-        // 4. Modify if it's HTML
-        if (contentType && contentType.includes('text/html')) {
-    let html = data.toString();
-
-    // 1. Define the Super Script (Combines both your helper and CORS fixer)
+// 1. Define the Super Script (Combines both your helper and CORS fixer)
     const superScript = `
         <script>
             // PART A: The CORS / Fetch Fixer
@@ -156,6 +141,23 @@ window.location.replace = function(url) {
 };
         </script>
     `;
+
+        const headersToRemove = ['x-frame-options', 'content-security-policy', 'strict-transport-security',
+            'content-security-policy-report-only','expect-ct','x-content-type-options','cross-origin-opener-policy', 
+            'cross-origin-embedder-policy'
+        ];// Delete EVERY known header that can block an iframe
+        
+headersToRemove.forEach(h => delete response.headers[h]);
+        // 3. Set the Content-Type (The "Grabber")
+        const contentType = response.headers['content-type'];
+        res.setHeader('Content-Type', contentType);
+
+        let data = response.data;
+
+        // 4. Modify if it's HTML
+        if (contentType && contentType.includes('text/html')) {
+    let html = data.toString();
+
 
     // 2. Clean up: Remove any existing <base> tags
     html = html.replace(/<base[^>]*>/gi, '');
