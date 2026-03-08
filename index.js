@@ -124,7 +124,7 @@ app.get('/proxy', async (req, res) => {
             html = html.replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '');
             html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
             
-            const injection = \`<head><base href="${origin}/">\${superScript}\`;
+            const injection = `<head><base href="${origin}/">${superScript}`;
             html = html.replace(/<head[^>]*>/i, injection);
 
             res.send(html);
@@ -138,5 +138,5 @@ app.get('/proxy', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(\`Server is running on port \${PORT}\`);
+    console.log(`Server is running on port ${PORT}`);
 });
