@@ -25,7 +25,7 @@ app.get('/proxy', async (req, res) => {
         // 2. Fetch the external site
         const response = await axios.get(targetUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' },
-        responseType: 'arraybuffer',
+        responseType: 'utf-8',
         maxRedirects: 5 // Ensure we follow those "www" jumps
         });
 
@@ -36,11 +36,7 @@ app.get('/proxy', async (req, res) => {
             'content-security-policy-report-only','expect-ct','x-content-type-options','cross-origin-opener-policy', 
             'cross-origin-embedder-policy'
         ];// Delete EVERY known header that can block an iframe
-
-        // Delete the security headers that block iframes
-        delete response.headers[headersToRemove];
-        // Inside your app.get('/proxy'...)
-
+        
 headersToRemove.forEach(h => delete response.headers[h]);
         // 3. Set the Content-Type (The "Grabber")
         const contentType = response.headers['content-type'];
@@ -55,10 +51,6 @@ headersToRemove.forEach(h => delete response.headers[h]);
     // 1. Define the Super Script (Combines both your helper and CORS fixer)
     const superScript = `
         <script>
-        // Construct the full URL with the search terms
-        const url = new URL(form.action, window.location.href);
-        const formData = new FormData(form);
-        const params = new URLSearchParams(formData);
             // PART A: The CORS / Fetch Fixer
             const _p = (u) => {
                 if (!u || u.startsWith(window.location.origin) || u.startsWith('/proxy')) return u;
@@ -77,14 +69,16 @@ headersToRemove.forEach(h => delete response.headers[h]);
                 return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
             };
 
-            // PART B: The Click Hijacker
-            document.addEventListener('click', e => {
-                const link = e.target.closest('a');
-                if (link && link.href && !link.href.includes('/proxy?url=')) {
-                    e.preventDefault();
-                    window.location.href = '/proxy?url=' + encodeURIComponent(link.href);
-                }
-            });
+            // PART B: The Upgraded Click Hijacker
+document.addEventListener('click', e => {
+    const link = e.target.closest('a');
+    if (link && link.href && !link.href.includes('/proxy?url=')) {
+        e.preventDefault();
+        // Use window.location.origin to ensure we point back to YOUR server
+        const proxyUrl = window.location.origin + '/proxy?url=' + encodeURIComponent(link.href);
+        window.location.href = proxyUrl;
+    }
+});
             // PART C: The Form Hijacker
 document.addEventListener('submit', e => {
     const form = e.target.closest('form');
@@ -113,7 +107,19 @@ window.addEventListener('error', e => {
         e.stopImmediatePropagation();
     }
 }, true);
+// Intercept all attempts to change the location manually
+const originalLocation = window.location.assign;
+window.location.assign = function(url) {
+    const proxied = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+    return originalLocation.call(window.location, proxied);
+};
 
+// Also watch for "replace" calls (often used by search engines)
+const originalReplace = window.location.replace;
+window.location.replace = function(url) {
+    const proxied = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+    return originalReplace.call(window.location, proxied);
+};
         </script>
     `;
 
