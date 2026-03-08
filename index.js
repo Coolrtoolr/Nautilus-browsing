@@ -53,13 +53,21 @@ headersToRemove.forEach(h => delete response.headers[h]);
         <script>
             // PART A: The CORS / Fetch Fixer
             const _p = (u) => {
-    // If the URL is empty, or already proxied, or points to OUR server, leave it alone!
-    if (!u || u.includes('/proxy?url=') || u.includes('nautilus-browsing.onrender.com')) return u;
+    // 1. If it's empty, ignore it
+    if (!u) return u;
+    
+    // 2. If it's already proxied or points to your own server, ignore it
+    if (u.includes('/proxy?url=') || u.includes('nautilus-browsing.onrender.com')) {
+        return u;
+    }
     
     try {
+        // 3. Otherwise, wrap it in your proxy URL
         const full = new URL(u, window.location.href).href;
         return window.location.origin + '/proxy?url=' + encodeURIComponent(full);
-    } catch(e) { return u; }
+    } catch(e) { 
+        return u; 
+    }
 };
             const { fetch: origFetch } = window;
             window.fetch = async (...args) => {
