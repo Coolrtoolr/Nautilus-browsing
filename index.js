@@ -106,14 +106,27 @@ document.addEventListener('submit', e => {
     }
 });
 
-// A simpler way to hijack manual navigation
-window.location.assign = (url) => {
-    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+// PART D: Soft Security Neutralizer
+// We "wrap" the original functions to prevent them from crashing the page
+const wrapHistory = (method) => {
+    const original = window.history[method];
+    window.history[method] = function(state, title, url) {
+        try {
+            // Only allow the change if it stays on our proxy domain
+            if (url && (url.startsWith('/') || url.includes(window.location.origin))) {
+                return original.apply(this, arguments);
+            }
+        } catch (e) {
+            console.warn('History.' + method + ' blocked to prevent crash');
+        }
+        // If it's a cross-origin URL, we just do nothing (fail silently)
+    };
 };
 
-window.location.replace = (url) => {
-    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
-};
+wrapHistory('pushState');
+wrapHistory('replaceState');
+
+
 // Intercept all attempts to change the location manually
 const originalLocation = window.location.assign;
 window.location.assign = function(url) {
