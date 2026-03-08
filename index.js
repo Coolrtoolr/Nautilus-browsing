@@ -1,4 +1,15 @@
 const express = require('express');
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "*");
+    
+    // If it's a preflight request, just send a 200 OK and stop there
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 const path = require('path');
 const axios = require('axios');
 const app = express();
