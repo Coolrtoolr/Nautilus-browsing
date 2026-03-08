@@ -96,17 +96,14 @@ document.addEventListener('submit', e => {
     }
 });
 
-// PART D: Security Neutralizer
-// Disable history manipulation to prevent origin mismatch errors
-window.history.replaceState = function() { /* Do nothing */ };
-window.history.pushState = function() { /* Do nothing */ };
+// A simpler way to hijack manual navigation
+window.location.assign = (url) => {
+    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+};
 
-// Optional: Try to catch font/resource errors silently
-window.addEventListener('error', e => {
-    if (e.message.includes('history') || e.message.includes('origin')) {
-        e.stopImmediatePropagation();
-    }
-}, true);
+window.location.replace = (url) => {
+    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(new URL(url, window.location.href).href);
+};
 // Intercept all attempts to change the location manually
 const originalLocation = window.location.assign;
 window.location.assign = function(url) {
