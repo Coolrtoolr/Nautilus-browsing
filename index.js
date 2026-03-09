@@ -44,15 +44,23 @@ app.get('/proxy', async (req, res) => {
             'cross-origin-opener-policy', 'cross-origin-embedder-policy'
         ];
         headersToRemove.forEach(h => delete response.headers[h]);
-
+        // FIND THIS SECTION IN YOUR /proxy ROUTE:
         const contentType = response.headers['content-type'];
+        res.setHeader('Access-Control-Allow-Origin', '*'); // Force CORS permission here too
         res.setHeader('Content-Type', contentType);
 
+        let data = response.data;
+
         if (contentType && contentType.includes('text/html')) {
-            let html = response.data.toString();
-            // Automatically proxy any URL found inside quotes (covers fonts and background images)
-            html = html.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p1) => {
-                return `url("${window.location.origin}/proxy?url=${encodeURIComponent(origin + p1)}")`;
+            // ... your existing HTML rewriting logic ...
+        } 
+        // ADD THIS NEW SECTION FOR CSS:
+        else if (contentType && contentType.includes('text/css')) {
+            let css = data.toString();
+            // This regex finds url(/path/to/font) and turns it into url(/proxy?url=https://duckduckgo.com/path/to/font)
+            css = css.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p1) => {
+                const proxiedUrl = `${origin}${p1}`;
+                return `url("/proxy?url=${encodeURIComponent(proxiedUrl)}")`;
             });
 
             const superScript = `
