@@ -50,6 +50,10 @@ app.get('/proxy', async (req, res) => {
 
         if (contentType && contentType.includes('text/html')) {
             let html = response.data.toString();
+            // Automatically proxy any URL found inside quotes (covers fonts and background images)
+            html = html.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p1) => {
+                return `url("${window.location.origin}/proxy?url=${encodeURIComponent(origin + p1)}")`;
+            });
 
             const superScript = `
         <script>
@@ -97,18 +101,23 @@ window.fetch = async (...args) => {
                 }
             });
 
-            // PART C: The Form Hijacker
+                        // PART C: The Aggressive Form Hijacker
+            // We use 'true' at the end to "Capture" the event before DDG's scripts can cancel it
             document.addEventListener('submit', e => {
                 const form = e.target.closest('form');
                 if (form && form.action) {
                     e.preventDefault();
+                    e.stopImmediatePropagation(); // Tell other scripts to back off
+                    
                     const tUrl = new URL(form.action, window.location.href); 
                     const formData = new FormData(form);
                     const params = new URLSearchParams(formData);
+                    
+                    // Ensure we are sending the search to OUR proxy
                     const finalSearchUrl = tUrl.origin + tUrl.pathname + '?' + params.toString();
                     window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(finalSearchUrl);
                 }
-            });
+            }, true);
 
             // PART D: Soft Security Neutralizer
             const wrapHistory = (method) => {
@@ -132,6 +141,15 @@ window.fetch = async (...args) => {
             window.location.replace = function(url) {
                 window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
             };
+
+                        // PART E: The Crash Shim
+            // This prevents "syncWithLegacyHistory" from breaking the page
+            window.DDG = window.DDG || {};
+            window.DDG.Pages = window.DDG.Pages || {};
+            window.DDG.Pages.SERP = window.DDG.Pages.SERP || { 
+                ready: function() { console.log("DDG Shim: SERP Ready caught"); },
+                syncWithLegacyHistory: function() { return true; }
+            };
         </script>
     `;
 
@@ -141,6 +159,13 @@ window.fetch = async (...args) => {
             
             const injection = `<head><base href="${origin}/">${superScript}`;
             html = html.replace(/<head[^>]*>/i, injection);
+
+            // Inside your app.get('/proxy'...) 
+// Right before res.send(html) or res.send(response.data)
+
+res.setHeader('Access-Control-Allow-Origin', '*');
+res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+res.setHeader('Access-Control-Allow-Headers', '*');
 
             res.send(html);
         } else {
