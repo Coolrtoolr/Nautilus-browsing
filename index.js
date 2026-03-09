@@ -147,11 +147,23 @@ app.get('/proxy', async (req, res) => {
             });
             res.send(cssStr);
 
-        // --- CASE C: EVERYTHING ELSE (Images, Fonts, JS) ---
-        } else {
-            // Because we used 'arraybuffer', images and fonts will send perfectly!
-            res.send(rawData);
-        }
+        // --- CASE C: IF IT'S JAVASCRIPT ---
+        } else if (contentType.includes('application/javascript') || contentType.includes('text/javascript')) {
+    let jsStr = rawData.toString('utf8');
+    
+    // We inject the proxy helper at the very top of the script
+    // This way, the script has the function it needs to wrap its own URLs
+    const jsHelper = `
+        const _p = (u) => {
+            if (!u || u.includes('/proxy?url=') || u.includes(window.location.hostname)) return u;
+            try {
+                let absoluteUrl = u.startsWith('/') && !u.startsWith('//') ? '${origin}' + u : new URL(u, window.location.href).href;
+                return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
+            } catch(e) { return u; }
+        };
+    `; 
+    res.send(jsHelper + jsStr);
+}
 
     } catch (error) {
         console.error("Proxy Error:", error.message);
