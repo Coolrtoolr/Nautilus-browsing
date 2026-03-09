@@ -37,177 +37,102 @@ app.get('/proxy', async (req, res) => {
         const finalUrl = response.request.res.responseUrl || targetUrl;
         const origin = new URL(finalUrl).origin;
 
-        // Clean headers before setting them
+        // 1. Clean security headers
         const headersToRemove = [
             'x-frame-options', 'content-security-policy', 'strict-transport-security',
             'content-security-policy-report-only', 'expect-ct', 'x-content-type-options',
             'cross-origin-opener-policy', 'cross-origin-embedder-policy'
         ];
         headersToRemove.forEach(h => delete response.headers[h]);
-        // FIND THIS SECTION IN YOUR /proxy ROUTE:
-        const contentType = response.headers['content-type'];
-        res.setHeader('Access-Control-Allow-Origin', '*'); // Force CORS permission here too
+
+        // 2. Set permissive CORS headers for the browser
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+
+        const contentType = response.headers['content-type'] || '';
         res.setHeader('Content-Type', contentType);
 
-        let data = response.data;
+        let data = response.data.toString();
 
-        if (contentType && contentType.includes('text/html')) {
-            // ... your existing HTML rewriting logic ...
-        } 
-        // ADD THIS NEW SECTION FOR CSS:
-        else if (contentType && contentType.includes('text/css')) {
-            let css = data.toString();
-            // This regex finds url(/path/to/font) and turns it into url(/proxy?url=https://duckduckgo.com/path/to/font)
-            css = css.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p1) => {
-                const proxiedUrl = `${origin}${p1}`;
-                return `url("/proxy?url=${encodeURIComponent(proxiedUrl)}")`;
-            });
-
+        // --- CASE A: IF IT'S HTML ---
+        if (contentType.includes('text/html')) {
             const superScript = `
-        <script>
-            // PART A: The CORS / Fetch Fixer
-            const _p = (u) => {
-                if (!u) return u;
-                if (u.includes('/proxy?url=') || u.includes('nautilus-browsing.onrender.com')) return u;
-
-                try {
-                    let absoluteUrl = u;
-                    if (u.startsWith('/') && !u.startsWith('//')) {
-                        absoluteUrl = '${origin}' + u; 
-                    } else {
-                        absoluteUrl = new URL(u, window.location.href).href;
-                    }
-                    return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
-                } catch(e) { 
-                    return u; 
-                }
-            };
-
-            const { fetch: origFetch } = window;
-window.fetch = async (...args) => {
-    if (typeof args[0] === 'string') {
-        args[0] = _p(args[0]);
-    } else if (args[0] instanceof Request) {
-        // We have to create a NEW request because the URL property is read-only
-        const newUrl = _p(args[0].url);
-        args[0] = new Request(newUrl, args[0]);
-    }
-    return origFetch(...args);
-};
-
-            const origOpen = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function(m, u) {
-                return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
-            };
-
-            // PART B: The Upgraded Click Hijacker
-            document.addEventListener('click', e => {
-                const link = e.target.closest('a');
-                if (link && link.href && !link.href.includes('/proxy?url=')) {
-                    e.preventDefault();
-                    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(link.href);
-                }
-            });
-
-                        // PART C: The Aggressive Form Hijacker
-            // We use 'true' at the end to "Capture" the event before DDG's scripts can cancel it
-            document.addEventListener('submit', e => {
-                const form = e.target.closest('form');
-                if (form && form.action) {
-                    e.preventDefault();
-                    e.stopImmediatePropagation(); // Tell other scripts to back off
-                    
-                    const tUrl = new URL(form.action, window.location.href); 
-                    const formData = new FormData(form);
-                    const params = new URLSearchParams(formData);
-                    
-                    // Ensure we are sending the search to OUR proxy
-                    const finalSearchUrl = tUrl.origin + tUrl.pathname + '?' + params.toString();
-                    window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(finalSearchUrl);
-                }
-            }, true);
-
-            // PART D: Soft Security Neutralizer
-            const wrapHistory = (method) => {
-                const original = window.history[method];
-                window.history[method] = function(state, title, url) {
+            <script>
+                const _p = (u) => {
+                    if (!u || u.includes('/proxy?url=') || u.includes(window.location.hostname)) return u;
                     try {
-                        if (url && (url.startsWith('/') || url.includes(window.location.origin))) {
-                            return original.apply(this, arguments);
-                        }
-                    } catch (e) {
-                        console.warn('History.' + method + ' blocked to prevent crash');
-                    }
+                        let absoluteUrl = u.startsWith('/') && !u.startsWith('//') ? '${origin}' + u : new URL(u, window.location.href).href;
+                        return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
+                    } catch(e) { return u; }
                 };
-            };
-            wrapHistory('pushState');
-            wrapHistory('replaceState');
 
-            window.location.assign = function(url) {
-                window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
-            };
-            window.location.replace = function(url) {
-                window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
-            };
+                // Fetch & XHR Interceptors
+                const { fetch: origFetch } = window;
+                window.fetch = async (...args) => {
+                    if (typeof args[0] === 'string') args[0] = _p(args[0]);
+                    else if (args[0] instanceof Request) args[0] = new Request(_p(args[0].url), args[0]);
+                    return origFetch(...args);
+                };
+                const origOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(m, u) {
+                    return origOpen.apply(this, [m, _p(u), ...Array.from(arguments).slice(2)]);
+                };
 
-            // PART E: The Omni-Shim
-            // This is a "Recursive Proxy" that creates missing properties automatically
-            const createOmniObject = () => {
-                return new Proxy(() => {}, {
-                    get: (target, prop) => {
-                        if (prop === 'then') return undefined; // Don't break Promises
-                        if (!(prop in target)) {
-                            target[prop] = createOmniObject();
-                        }
-                        return target[prop];
-                    },
-                    set: (target, prop, value) => {
-                        target[prop] = value;
-                        return true;
+                // Hijackers
+                document.addEventListener('click', e => {
+                    const link = e.target.closest('a');
+                    if (link && link.href && !link.href.includes('/proxy?url=')) {
+                        e.preventDefault();
+                        window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(link.href);
                     }
+                }, true);
+
+                document.addEventListener('submit', e => {
+                    const form = e.target.closest('form');
+                    if (form && form.action) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        const tUrl = new URL(form.action, window.location.href);
+                        const params = new URLSearchParams(new FormData(form));
+                        window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(tUrl.origin + tUrl.pathname + '?' + params.toString());
+                    }
+                }, true);
+
+                // Omni-Shim (The "Yes Man")
+                const createOmni = () => new Proxy(() => {}, {
+                    get: (t, p) => (p === 'then' ? undefined : (p in t ? t[p] : (t[p] = createOmni()))),
+                    set: (t, p, v) => { t[p] = v; return true; }
                 });
-            };
+                window.DDG = window.DDG || createOmni();
+                window.DDG_Settings = window.DDG_Settings || createOmni();
+                window.next = window.next || createOmni();
+            </script>`;
 
-            // Apply the shim to common global names DDG uses
-            window.DDG = window.DDG || createOmniObject();
-            window.DDG_Settings = window.DDG_Settings || createOmniObject();
-            window.next = window.next || createOmniObject();
-        </script>
-    `;
-
-            html = html.replace(/<base[^>]*>/gi, '');
-            html = html.replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '');
-            html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
+            data = data.replace(/<base[^>]*>/gi, '')
+                       .replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '')
+                       .replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
             
-            const injection = `<head><base href="${origin}/">${superScript}`;
-            html = html.replace(/<head[^>]*>/i, injection);
+            data = data.replace(/<head[^>]*>/i, `<head><base href="${origin}/">${superScript}`);
+            res.send(data);
 
-            // Inside your app.get('/proxy'...) 
-// Right before res.send(html) or res.send(response.data)
+        // --- CASE B: IF IT'S CSS ---
+        } else if (contentType.includes('text/css')) {
+            // Rewrite font URLs so they go through our proxy
+            const css = data.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p1) => {
+                return `url("/proxy?url=${encodeURIComponent(origin + p1)}")`;
+            });
+            res.send(css);
 
-res.setHeader('Access-Control-Allow-Origin', '*');
-res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-res.setHeader('Access-Control-Allow-Headers', '*');
-
-            res.send(html);
+        // --- CASE C: EVERYTHING ELSE (Images, JS, etc.) ---
         } else {
             res.send(response.data);
         }
+
     } catch (error) {
         console.error("Proxy Error:", error.message);
         res.status(502).send("Proxy error: " + error.message);
     }
-});
-
-// The "Safety Net" for relative paths
-app.all('*', (req, res, next) => {
-    // If the request isn't for / or /proxy, and it's not a static file...
-    if (req.url === '/' || req.url.startsWith('/proxy')) return next();
-    
-    // Redirect it to our proxy!
-    const fallbackUrl = 'https://duckduckgo.com' + req.url;
-    console.log("Redirecting missed request:", fallbackUrl);
-    res.redirect('/proxy?url=' + encodeURIComponent(fallbackUrl));
 });
 
 app.listen(PORT, () => {
