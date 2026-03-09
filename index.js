@@ -57,6 +57,10 @@ app.get('/proxy', async (req, res) => {
         if (contentType.includes('text/html')) {
             let htmlStr = rawData.toString('utf8'); // Convert binary to string safely
 
+            htmlStr = htmlStr.replace(/(src|href)=["'](\/[^"']+)["']/g, (match, attribute, path) => {
+                return `${attribute}="/proxy?url=${encodeURIComponent(origin + path)}"`;
+            });
+
             const superScript = `
             <script>
                 const _p = (u) => {
@@ -124,7 +128,7 @@ app.get('/proxy', async (req, res) => {
                              .replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '')
                              .replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
             htmlStr = htmlStr.replace(/<head[^>]*>/i, `<head><base href="${origin}/">${superScript}`);
-            
+
             res.send(htmlStr);
 
         // --- CASE B: IF IT'S CSS ---
