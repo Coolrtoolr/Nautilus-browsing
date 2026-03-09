@@ -60,6 +60,14 @@ app.get('/proxy', async (req, res) => {
             htmlStr = htmlStr.replace(/(src|href)=["'](\/[^"']+)["']/g, (match, attribute, path) => {
                 return `${attribute}="/proxy?url=${encodeURIComponent(origin + path)}"`;
             });
+            
+            // Catch: style="background-image: url('/path/to/img.png')"
+            htmlStr = htmlStr.replace(/style=["'][^"']*url\(['"]?(\/[^'"]+)['"]?\)[^"']*["']/g, (match) => {
+            // We can reuse our logic to wrap the internal URL
+                return match.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (m, path) => {
+                    return `url("/proxy?url=${encodeURIComponent(origin + path)}")`;
+                });
+            });
 
             const superScript = `
             <script>
