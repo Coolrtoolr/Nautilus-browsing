@@ -150,7 +150,7 @@ window.fetch = async (...args) => {
                 window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
             };
 
-            / PART E: The Omni-Shim
+            // PART E: The Omni-Shim
             // This is a "Recursive Proxy" that creates missing properties automatically
             const createOmniObject = () => {
                 return new Proxy(() => {}, {
