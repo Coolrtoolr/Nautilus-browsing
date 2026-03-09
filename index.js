@@ -22,13 +22,13 @@ app.get('/proxy', async (req, res) => {
     }
 });
 
-/*app.all('*', (req, res, next) => {
-    if (req.url === '/' || req.url.startsWith('/proxy')) return next();
+app.all('*', (req, res) => {
+    // If the browser asks for /logo.png, we send it to /proxy?url=https://duckduckgo.com/logo.png
     const fallbackUrl = 'https://duckduckgo.com' + req.url;
     res.redirect('/proxy?url=' + encodeURIComponent(fallbackUrl));
-});*/
+});
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
