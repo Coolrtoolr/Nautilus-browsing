@@ -28,6 +28,8 @@ app.get('/proxy', async (req, res) => {
     res.redirect('/proxy?url=' + encodeURIComponent(fallbackUrl));
 });*/
 
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
