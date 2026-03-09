@@ -30,13 +30,14 @@ app.get('/proxy', async (req, res) => {
 
         const response = await axios.get(targetUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' },
-            responseType: 'arraybuffer', // FETCH AS RAW BINARY DATA!
+            responseType: 'arraybuffer', 
             maxRedirects: 5 
         });
 
         const finalUrl = response.request.res.responseUrl || targetUrl;
         const origin = new URL(finalUrl).origin;
 
+        // 1. STRIP SECURITY HEADERS
         const headersToRemove = [
             'x-frame-options', 'content-security-policy', 'strict-transport-security',
             'content-security-policy-report-only', 'expect-ct', 'x-content-type-options',
@@ -44,6 +45,8 @@ app.get('/proxy', async (req, res) => {
         ];
         headersToRemove.forEach(h => delete response.headers[h]);
 
+        // 2. THE CORS CHECK & FORCE (Set to "yes"!)
+        // We ensure we ALWAYS allow the origin so the browser doesn't block us
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', '*');
@@ -51,22 +54,20 @@ app.get('/proxy', async (req, res) => {
         const contentType = response.headers['content-type'] || '';
         res.setHeader('Content-Type', contentType);
 
-        let rawData = response.data; // Keep it as raw binary for now
+        let rawData = response.data;
 
         // --- CASE A: IF IT'S HTML ---
         if (contentType.includes('text/html')) {
-            let htmlStr = rawData.toString('utf8'); // Convert binary to string safely
+            let htmlStr = rawData.toString('utf8');
 
-            htmlStr = htmlStr.replace(/(src|href)=["'](\/[^"']+)["']/g, (match, attribute, path) => {
-                return `${attribute}="/proxy?url=${encodeURIComponent(origin + path)}"`;
+            // Rewrite basic attributes
+            htmlStr = htmlStr.replace(/(src|href)=["'](\/[^"']+)["']/g, (match, attr, path) => {
+                return `${attr}="/proxy?url=${encodeURIComponent(origin + path)}"`;
             });
             
-            // Catch: style="background-image: url('/path/to/img.png')"
+            // Rewrite inline styles
             htmlStr = htmlStr.replace(/style=["'][^"']*url\(['"]?(\/[^'"]+)['"]?\)[^"']*["']/g, (match) => {
-            // We can reuse our logic to wrap the internal URL
-                return match.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (m, path) => {
-                    return `url("/proxy?url=${encodeURIComponent(origin + path)}")`;
-                });
+                return match.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (m, p) => `url("/proxy?url=${encodeURIComponent(origin + p)}")`);
             });
 
             const superScript = `
@@ -109,19 +110,17 @@ app.get('/proxy', async (req, res) => {
                     }
                 }, true);
 
-                // PART D: Soft Security Neutralizer (PUT BACK!)
                 const wrapHistory = (method) => {
                     const original = window.history[method];
                     window.history[method] = function(state, title, url) {
                         try {
                             if (url && (url.startsWith('/') || url.includes(window.location.origin))) return original.apply(this, arguments);
-                        } catch (e) { console.warn('History.' + method + ' blocked to prevent crash'); }
+                        } catch (e) { console.warn('History.' + method + ' blocked'); }
                     };
                 };
-                wrapHistory('pushState');
-                wrapHistory('replaceState');
-                window.location.assign = function(url) { window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url)); };
-                window.location.replace = function(url) { window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url)); };
+                wrapHistory('pushState'); wrapHistory('replaceState');
+                window.location.assign = (url) => { window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url)); };
+                window.location.replace = (url) => { window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url)); };
 
                 const createOmni = () => new Proxy(() => {}, {
                     get: (t, p) => (p === 'then' ? undefined : (p in t ? t[p] : (t[p] = createOmni()))),
@@ -136,34 +135,32 @@ app.get('/proxy', async (req, res) => {
                              .replace(/<meta[^>]*X-Frame-Options[^>]*>/gi, '')
                              .replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
             htmlStr = htmlStr.replace(/<head[^>]*>/i, `<head><base href="${origin}/">${superScript}`);
-
             res.send(htmlStr);
 
         // --- CASE B: IF IT'S CSS ---
         } else if (contentType.includes('text/css')) {
             let cssStr = rawData.toString('utf8');
-            cssStr = cssStr.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p1) => {
-                return `url("/proxy?url=${encodeURIComponent(origin + p1)}")`;
-            });
+            cssStr = cssStr.replace(/url\(['"]?(\/[^'"]+)['"]?\)/g, (match, p) => `url("/proxy?url=${encodeURIComponent(origin + p)}")`);
             res.send(cssStr);
 
-        // --- CASE C: IF IT'S JAVASCRIPT ---
+        // --- CASE C: IF IT'S JAVASCRIPT (The Missing Piece!) ---
         } else if (contentType.includes('application/javascript') || contentType.includes('text/javascript')) {
-    let jsStr = rawData.toString('utf8');
-    
-    // We inject the proxy helper at the very top of the script
-    // This way, the script has the function it needs to wrap its own URLs
-    const jsHelper = `
-        const _p = (u) => {
-            if (!u || u.includes('/proxy?url=') || u.includes(window.location.hostname)) return u;
-            try {
-                let absoluteUrl = u.startsWith('/') && !u.startsWith('//') ? '${origin}' + u : new URL(u, window.location.href).href;
-                return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
-            } catch(e) { return u; }
-        };
-    `; 
-    res.send(jsHelper + jsStr);
-}
+            let jsStr = rawData.toString('utf8');
+            
+            // Injecting _p so that internal script requests are also proxied
+            const jsHelper = `const _p = (u) => {
+                if (!u || u.includes('/proxy?url=') || u.includes(window.location.hostname)) return u;
+                try {
+                    let absoluteUrl = u.startsWith('/') && !u.startsWith('//') ? '${origin}' + u : new URL(u, window.location.href).href;
+                    return window.location.origin + '/proxy?url=' + encodeURIComponent(absoluteUrl);
+                } catch(e) { return u; }
+            };\n`;
+            res.send(jsHelper + jsStr);
+
+        // --- CASE D: EVERYTHING ELSE (Images, Fonts) ---
+        } else {
+            res.send(rawData);
+        }
 
     } catch (error) {
         console.error("Proxy Error:", error.message);
@@ -171,7 +168,6 @@ app.get('/proxy', async (req, res) => {
     }
 });
 
-// SAFETY NET (PUT BACK!)
 app.all('*', (req, res, next) => {
     if (req.url === '/' || req.url.startsWith('/proxy')) return next();
     const fallbackUrl = 'https://duckduckgo.com' + req.url;
@@ -179,5 +175,5 @@ app.all('*', (req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
