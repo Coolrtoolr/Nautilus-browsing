@@ -2,17 +2,15 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const app = express();
+
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.header("Access-Control-Allow-Headers", "*");
-    
-    // If it's a preflight request, just send a 200 OK and stop there
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
     next();
 });
+
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(__dirname));
@@ -74,10 +72,16 @@ app.get('/proxy', async (req, res) => {
             };
 
             const { fetch: origFetch } = window;
-            window.fetch = async (...args) => {
-                args[0] = typeof args[0] === 'string' ? _p(args[0]) : args[0];
-                return origFetch(...args);
-            };
+window.fetch = async (...args) => {
+    if (typeof args[0] === 'string') {
+        args[0] = _p(args[0]);
+    } else if (args[0] instanceof Request) {
+        // We have to create a NEW request because the URL property is read-only
+        const newUrl = _p(args[0].url);
+        args[0] = new Request(newUrl, args[0]);
+    }
+    return origFetch(...args);
+};
 
             const origOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(m, u) {
@@ -146,6 +150,17 @@ app.get('/proxy', async (req, res) => {
         console.error("Proxy Error:", error.message);
         res.status(502).send("Proxy error: " + error.message);
     }
+});
+
+// The "Safety Net" for relative paths
+app.all('*', (req, res, next) => {
+    // If the request isn't for / or /proxy, and it's not a static file...
+    if (req.url === '/' || req.url.startsWith('/proxy')) return next();
+    
+    // Redirect it to our proxy!
+    const fallbackUrl = 'https://duckduckgo.com' + req.url;
+    console.log("Redirecting missed request:", fallbackUrl);
+    res.redirect('/proxy?url=' + encodeURIComponent(fallbackUrl));
 });
 
 app.listen(PORT, () => {
