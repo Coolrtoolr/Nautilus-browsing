@@ -150,14 +150,28 @@ window.fetch = async (...args) => {
                 window.location.href = window.location.origin + '/proxy?url=' + encodeURIComponent(_p(url));
             };
 
-                        // PART E: The Crash Shim
-            // This prevents "syncWithLegacyHistory" from breaking the page
-            window.DDG = window.DDG || {};
-            window.DDG.Pages = window.DDG.Pages || {};
-            window.DDG.Pages.SERP = window.DDG.Pages.SERP || { 
-                ready: function() { console.log("DDG Shim: SERP Ready caught"); },
-                syncWithLegacyHistory: function() { return true; }
+            / PART E: The Omni-Shim
+            // This is a "Recursive Proxy" that creates missing properties automatically
+            const createOmniObject = () => {
+                return new Proxy(() => {}, {
+                    get: (target, prop) => {
+                        if (prop === 'then') return undefined; // Don't break Promises
+                        if (!(prop in target)) {
+                            target[prop] = createOmniObject();
+                        }
+                        return target[prop];
+                    },
+                    set: (target, prop, value) => {
+                        target[prop] = value;
+                        return true;
+                    }
+                });
             };
+
+            // Apply the shim to common global names DDG uses
+            window.DDG = window.DDG || createOmniObject();
+            window.DDG_Settings = window.DDG_Settings || createOmniObject();
+            window.next = window.next || createOmniObject();
         </script>
     `;
 
